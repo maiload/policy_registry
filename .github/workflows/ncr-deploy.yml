@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
 
 env:
-  NCR_REGISTRY: ${{ secrets.NCR_REGISTRY }}  # 로그인용 registry 주소 (예: example.kr.ncr.nhncloud.com)
-  NCR_NAMESPACE: ${{ secrets.NCR_NAMESPACE }}  # namespace (예: policy-registry)
-  NCR_REPOSITORY: opa-bundle  # 실제 이미지 이름
+  NCR_REGISTRY: e589d23d-kr1-registry.container.nhncloud.com
+  NCR_NAMESPACE: policy-registry
+  NCR_REPOSITORY: bundle
 
 jobs:
   deploy:
