@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 env:
-  NCR_REGISTRY: ${{ secrets.NCR_REGISTRY }}
-  NCR_REPOSITORY: policy-registry
+  NCR_REGISTRY: ${{ secrets.NCR_REGISTRY }}  # registry/namespace 포함 (예: example.kr.ncr.nhncloud.com/policy-registry)
+  NCR_REPOSITORY: opa-bundle  # 실제 이미지 이름
 
 jobs:
   deploy:
@@ -77,13 +77,16 @@ jobs:
           echo "Policy files:"
           ls -la policies/
 
-          # Policy 빌드 (latest 태그만 사용)
+          # Policy 빌드
           echo "Building policy bundle..."
-          policy build policies -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+          FULL_IMAGE="${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest"
+          echo "Image path: ${FULL_IMAGE}"
+
+          policy build policies -t ${FULL_IMAGE}
 
           # Policy push
           echo "Pushing policy bundle to NCR..."
-          policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+          policy push ${FULL_IMAGE}
 
           echo "✅ Successfully built and pushed to NCR"
           echo "📦 Registry: ${{ env.NCR_REGISTRY }}"
