@@ -1,4 +1,4 @@
-name: Deploy to NCR (Simple Version)
+name: Deploy to NCR
 
 on:
   push:
