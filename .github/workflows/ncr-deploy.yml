@@ -54,54 +54,44 @@ jobs:
           
           echo "✅ Successfully logged in to NCR"
 
-      - name: Build Policy Bundle
+      - name: Build and Push Policy Bundle
         run: |
-          echo "Building policy bundle..."
-          
+          echo "Building and pushing policy bundle..."
+
           # 정책 디렉토리 확인
           if [ ! -d "policies" ]; then
             echo "policies directory not found, creating sample..."
             mkdir -p policies
             cat > policies/example.rego <<EOF
           package example
-          
+
           default allow = false
-          
+
           allow {
               input.user == "admin"
           }
           EOF
           fi
-          
+
           # 정책 파일 목록 표시
           echo "Policy files:"
           ls -la policies/
-          
+
           # 태그 설정
           TAG="${GITHUB_SHA::8}"
-          
+
           # Policy 빌드
+          echo "Building policy bundle..."
           policy build policies \
             -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:${TAG} \
             -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
-          
-          echo "✅ Policy bundle built successfully"
-          echo "Tags: ${TAG}, latest"
 
-      - name: Push to NCR
-        run: |
+          # Policy push (빌드 직후 같은 세션에서 실행)
           echo "Pushing policy bundle to NCR..."
-          
-          # 태그 설정
-          TAG="${GITHUB_SHA::8}"
-          
-          # Policy push - 특정 태그
           policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:${TAG}
-          
-          # Policy push - latest 태그
           policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
-          
-          echo "✅ Successfully pushed to NCR"
+
+          echo "✅ Successfully built and pushed to NCR"
           echo "📦 Registry: ${{ env.NCR_REGISTRY }}"
           echo "📦 Repository: ${{ env.NCR_REPOSITORY }}"
           echo "📦 Tags: ${TAG}, latest"
