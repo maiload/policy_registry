@@ -77,24 +77,18 @@ jobs:
           echo "Policy files:"
           ls -la policies/
 
-          # 태그 설정
-          TAG="${GITHUB_SHA::8}"
-
-          # Policy 빌드
+          # Policy 빌드 (latest 태그만 사용)
           echo "Building policy bundle..."
-          policy build policies \
-            -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:${TAG} \
-            -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+          policy build policies -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
 
-          # Policy push (빌드 직후 같은 세션에서 실행)
+          # Policy push
           echo "Pushing policy bundle to NCR..."
-          policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:${TAG}
           policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
 
           echo "✅ Successfully built and pushed to NCR"
           echo "📦 Registry: ${{ env.NCR_REGISTRY }}"
           echo "📦 Repository: ${{ env.NCR_REPOSITORY }}"
-          echo "📦 Tags: ${TAG}, latest"
+          echo "📦 Tag: latest"
 
       - name: Verify Deployment
         run: |
@@ -108,17 +102,15 @@ jobs:
       - name: Create Summary
         if: success()
         run: |
-          TAG="${GITHUB_SHA::8}"
-          
           cat >> $GITHUB_STEP_SUMMARY <<EOF
           ## 📦 Policy Bundle Deployment Summary
-          
+
           ✅ **Successfully deployed to NHN Cloud Registry**
-          
+
           ### Deployment Details
           - **Registry**: \`${{ env.NCR_REGISTRY }}\`
           - **Repository**: \`${{ env.NCR_REPOSITORY }}\`
-          - **Tags**: \`${TAG}\`, \`latest\`
+          - **Tag**: \`latest\`
           - **Commit**: \`${{ github.sha }}\`
           
           ### Usage
