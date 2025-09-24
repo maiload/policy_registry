@@ -19,24 +19,28 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Policy CLI
+      - name: Install Policy CLI via Linuxbrew
         run: |
-          echo "Installing Policy CLI..."
-          
-          # Policy CLI 바이너리 직접 다운로드 (v0.1.55 - 안정적인 버전)
-          wget -q https://github.com/opcr-io/policy/releases/download/v0.1.55/policy_0.1.55_linux_x86_64.zip
-          
-          # 압축 해제
-          unzip -o policy_0.1.55_linux_x86_64.zip
-          
-          # 실행 권한 부여 및 이동
-          chmod +x policy
-          sudo mv policy /usr/local/bin/
-          
+          echo "Installing Policy CLI via Linuxbrew..."
+
+          # Homebrew/Linuxbrew 설치 (GitHub Actions Ubuntu runner에 이미 설치되어 있음)
+          # PATH 설정
+          echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
+          export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
+          # Homebrew 업데이트
+          brew update
+
+          # opcr-io tap 추가
+          brew tap opcr-io/tap
+
+          # Policy CLI 설치
+          brew install opcr-io/tap/policy
+
           # 버전 확인
           policy version
-          
-          echo "✅ Policy CLI installed successfully"
+
+          echo "✅ Policy CLI installed successfully via Linuxbrew"
 
       - name: Login to NCR
         run: |
