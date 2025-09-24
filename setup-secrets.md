@@ -14,9 +14,14 @@ https://github.com/maiload/policy_registry/settings/secrets/actions
 다음 Secrets를 "New repository secret"으로 추가:
 
 #### NCR_REGISTRY
-- **설명**: NHN Cloud Registry 주소 (namespace 포함)
-- **예시**: `example.kr.ncr.nhncloudservice.com/policy-registry`
-- **획득 방법**: NHN Cloud Console → Container → NHN Container Registry → Registry 정보 + namespace 추가
+- **설명**: NHN Cloud Registry 주소 (로그인용)
+- **예시**: `example.kr.ncr.nhncloudservice.com`
+- **획득 방법**: NHN Cloud Console → Container → NHN Container Registry → Registry 정보
+
+#### NCR_NAMESPACE
+- **설명**: NHN Cloud Registry namespace
+- **예시**: `policy-registry`
+- **획득 방법**: NHN Cloud Console → Container Registry → 프로젝트 또는 namespace 이름
 
 #### NCR_ACCESS_KEY
 - **설명**: NHN Cloud 사용자 Access Key
