@@ -9,7 +9,7 @@ on:
 
 env:
   NCR_REGISTRY: ${{ secrets.NCR_REGISTRY }}
-  NCR_REPOSITORY: policy_registry
+  NCR_REPOSITORY: policy-registry  # 하이픈 사용 (언더스코어는 Docker Registry에서 지원 안됨)
 
 jobs:
   deploy:
