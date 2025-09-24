@@ -1,0 +1,154 @@
+name: Deploy OPA Policies to NHN Cloud Registry
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'policies/**'
+      - '.github/workflows/ncr-policy-deploy.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag for the policy bundle'
+        required: false
+        default: 'latest'
+
+env:
+  # NHN Cloud Registry 설정
+  NCR_REGISTRY: ${{ secrets.NCR_REGISTRY }}  # 예: example.kr.ncr.nhncloudservice.com
+  NCR_REPOSITORY: policy_registry
+
+jobs:
+  build-and-push-policy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Install policy CLI
+      run: |
+        echo "Installing opcr policy CLI..."
+
+        # Homebrew tap 방식 대신 직접 바이너리 다운로드 (Linux 환경)
+        # Policy CLI 최신 버전 설치
+        curl -L https://github.com/opcr-io/policy/releases/latest/download/policy_Linux_x86_64.tar.gz -o policy.tar.gz
+        tar -xzf policy.tar.gz
+        sudo mv policy /usr/local/bin/
+        policy version
+
+        echo "Policy CLI installed successfully"
+
+    - name: Setup build environment
+      run: |
+        # 빌드 날짜와 커밋 정보 설정
+        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
+        echo "GIT_COMMIT=${GITHUB_SHA::8}" >> $GITHUB_ENV
+        echo "GIT_BRANCH=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
+
+    - name: Login to NHN Cloud Registry
+      env:
+        NCR_USERNAME: ${{ secrets.NCR_ACCESS_KEY }}
+        NCR_PASSWORD: ${{ secrets.NCR_SECRET_KEY }}
+      run: |
+        echo "Logging in to NHN Cloud Registry..."
+        policy login \
+          -s ${{ env.NCR_REGISTRY }} \
+          -u ${{ env.NCR_USERNAME }} \
+          -p ${{ env.NCR_PASSWORD }}
+
+        echo "✅ Successfully logged in to NCR"
+
+    - name: Build policy bundle
+      run: |
+        # 태그 결정 (workflow_dispatch 입력 또는 기본값)
+        if [ "${{ github.event.inputs.tag }}" != "" ]; then
+          TAG="${{ github.event.inputs.tag }}"
+        else
+          TAG="${{ env.GIT_COMMIT }}"
+        fi
+
+        echo "Building policy bundle..."
+        echo "Tag: $TAG"
+
+        # Policy 메타데이터 파일 생성 (선택사항)
+        cat > policies/.policy.yaml <<EOF
+        apiVersion: v1
+        kind: Policy
+        metadata:
+          name: opa-policies
+          annotations:
+            description: "OPA Policies for Application"
+            version: "$TAG"
+            build-date: "${{ env.BUILD_DATE }}"
+            git-commit: "${{ github.sha }}"
+            git-branch: "${{ env.GIT_BRANCH }}"
+        EOF
+
+        # 정책 번들 빌드
+        policy build policies \
+          -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:$TAG \
+          -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+
+        echo "✅ Policy bundle built successfully"
+
+    - name: Push policy bundle to NCR
+      run: |
+        # 태그 결정
+        if [ "${{ github.event.inputs.tag }}" != "" ]; then
+          TAG="${{ github.event.inputs.tag }}"
+        else
+          TAG="${{ env.GIT_COMMIT }}"
+        fi
+
+        echo "Pushing policy bundle to NCR..."
+
+        # 특정 태그 푸시
+        policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:$TAG
+
+        # latest 태그도 푸시
+        policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+
+        echo "✅ Policy bundle pushed successfully"
+        echo "📦 Image: ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:$TAG"
+
+    - name: Verify deployment
+      run: |
+        echo "Verifying policy bundle in registry..."
+
+        # Policy CLI를 사용한 검증 (pull 테스트)
+        policy pull ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+
+        echo "✅ Verification successful"
+
+    - name: Create deployment summary
+      if: success()
+      run: |
+        cat >> $GITHUB_STEP_SUMMARY <<EOF
+        ## 📦 Policy Bundle Deployment Summary
+
+        ✅ **Successfully deployed OPA policies to NHN Cloud Registry**
+
+        ### Deployment Details
+        - **Registry**: \`${{ env.NCR_REGISTRY }}\`
+        - **Repository**: \`${{ env.NCR_REPOSITORY }}\`
+        - **Tags**: \`${{ env.GIT_COMMIT }}\`, \`latest\`
+        - **Commit**: \`${{ github.sha }}\`
+        - **Branch**: \`${{ env.GIT_BRANCH }}\`
+        - **Build Date**: \`${{ env.BUILD_DATE }}\`
+
+        ### Pull Command
+        \`\`\`bash
+        policy pull ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+        \`\`\`
+
+        ### Included Policies
+        $(find policies -name "*.rego" -type f | head -20)
+        EOF
+
+    - name: Notify on failure
+      if: failure()
+      run: |
+        echo "❌ Failed to deploy policies to NCR"
+        echo "Check the logs above for details"
+        exit 1
