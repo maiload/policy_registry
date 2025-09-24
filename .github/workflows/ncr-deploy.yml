@@ -9,7 +9,7 @@ on:
 
 env:
   NCR_REGISTRY: e589d23d-kr1-registry.container.nhncloud.com
-  NCR_REPOSITORY: policy-registry
+  NCR_REPOSITORY: policy_registry
   NCR_IMAGE: bundle
 
 jobs:
