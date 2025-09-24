@@ -1,4 +1,4 @@
-name: Deploy to NCR
+name: Deploy to NCR with Policy CLI
 
 on:
   push:
@@ -9,106 +9,153 @@ on:
 
 env:
   NCR_REGISTRY: ${{ secrets.NCR_REGISTRY }}
-  NCR_REPOSITORY: policy-registry  # 하이픈 사용 (언더스코어는 Docker Registry에서 지원 안됨)
+  NCR_REPOSITORY: policy-registry
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Install OPA for bundle creation
-      run: |
-        # OPA를 사용하여 번들 생성 (Policy CLI 대신)
-        curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64_static
-        chmod 755 ./opa
-        sudo mv ./opa /usr/local/bin/
-        opa version
+      - name: Install Policy CLI
+        run: |
+          echo "Installing Policy CLI..."
+          
+          # Policy CLI 바이너리 직접 다운로드 (v0.1.55 - 안정적인 버전)
+          wget -q https://github.com/opcr-io/policy/releases/download/v0.1.55/policy_0.1.55_linux_x86_64.zip
+          
+          # 압축 해제
+          unzip -o policy_0.1.55_linux_x86_64.zip
+          
+          # 실행 권한 부여 및 이동
+          chmod +x policy
+          sudo mv policy /usr/local/bin/
+          
+          # 버전 확인
+          policy version
+          
+          echo "✅ Policy CLI installed successfully"
 
-    - name: Create policy bundle
-      run: |
-        echo "Creating OPA bundle..."
+      - name: Login to NCR
+        run: |
+          echo "Logging in to NCR..."
+          
+          # Policy CLI로 NCR 로그인
+          policy login \
+            -s ${{ env.NCR_REGISTRY }} \
+            -u ${{ secrets.NCR_ACCESS_KEY }} \
+            -p ${{ secrets.NCR_SECRET_KEY }}
+          
+          echo "✅ Successfully logged in to NCR"
 
-        # 정책 디렉토리 확인
-        if [ ! -d "policies" ]; then
-          echo "policies directory not found, creating..."
-          mkdir -p policies
-          echo 'package example' > policies/example.rego
-        fi
+      - name: Build Policy Bundle
+        run: |
+          echo "Building policy bundle..."
+          
+          # 정책 디렉토리 확인
+          if [ ! -d "policies" ]; then
+            echo "policies directory not found, creating sample..."
+            mkdir -p policies
+            cat > policies/example.rego <<EOF
+          package example
+          
+          default allow = false
+          
+          allow {
+              input.user == "admin"
+          }
+          EOF
+          fi
+          
+          # 정책 파일 목록 표시
+          echo "Policy files:"
+          ls -la policies/
+          
+          # 태그 설정
+          TAG="${GITHUB_SHA::8}"
+          
+          # Policy 빌드
+          policy build policies \
+            -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:${TAG} \
+            -t ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+          
+          echo "✅ Policy bundle built successfully"
+          echo "Tags: ${TAG}, latest"
 
-        # .manifest 파일 생성
-        cat > .manifest <<EOF
-        {
-          "revision": "${{ github.sha }}",
-          "roots": ["policies"]
-        }
-        EOF
+      - name: Push to NCR
+        run: |
+          echo "Pushing policy bundle to NCR..."
+          
+          # 태그 설정
+          TAG="${GITHUB_SHA::8}"
+          
+          # Policy push - 특정 태그
+          policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:${TAG}
+          
+          # Policy push - latest 태그
+          policy push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+          
+          echo "✅ Successfully pushed to NCR"
+          echo "📦 Registry: ${{ env.NCR_REGISTRY }}"
+          echo "📦 Repository: ${{ env.NCR_REPOSITORY }}"
+          echo "📦 Tags: ${TAG}, latest"
 
-        # OPA bundle 생성
-        opa build -b policies/ -o bundle.tar.gz
+      - name: Verify Deployment
+        run: |
+          echo "Verifying deployment..."
+          
+          # Policy pull로 검증
+          policy pull ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+          
+          echo "✅ Deployment verified successfully"
 
-        # Bundle 확인
-        echo "Bundle created:"
-        ls -la bundle.tar.gz
-        opa inspect bundle.tar.gz
+      - name: Create Summary
+        if: success()
+        run: |
+          TAG="${GITHUB_SHA::8}"
+          
+          cat >> $GITHUB_STEP_SUMMARY <<EOF
+          ## 📦 Policy Bundle Deployment Summary
+          
+          ✅ **Successfully deployed to NHN Cloud Registry**
+          
+          ### Deployment Details
+          - **Registry**: \`${{ env.NCR_REGISTRY }}\`
+          - **Repository**: \`${{ env.NCR_REPOSITORY }}\`
+          - **Tags**: \`${TAG}\`, \`latest\`
+          - **Commit**: \`${{ github.sha }}\`
+          
+          ### Usage
+          
+          #### Pull Policy Bundle
+          \`\`\`bash
+          policy pull ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+          \`\`\`
+          
+          #### Run OPA with Bundle
+          \`\`\`bash
+          opa run -s --bundle ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
+          \`\`\`
+          
+          ### Policy Files Included
+          \`\`\`
+          $(find policies -name "*.rego" -type f | sort)
+          \`\`\`
+          EOF
 
-    - name: Setup Docker for NCR
-      run: |
-        # Docker를 사용하여 NCR에 푸시
-        echo "Preparing Docker image with OPA bundle..."
-
-        # Dockerfile 생성
-        cat > Dockerfile <<EOF
-        FROM openpolicyagent/opa:latest-static
-        COPY bundle.tar.gz /bundle.tar.gz
-        ENTRYPOINT ["/opa", "run", "--server", "--bundle", "/bundle.tar.gz"]
-        EOF
-
-        # Docker image 빌드
-        docker build -t opa-bundle:local .
-
-    - name: Login to NCR
-      uses: docker/login-action@v2
-      with:
-        registry: ${{ env.NCR_REGISTRY }}
-        username: ${{ secrets.NCR_ACCESS_KEY }}
-        password: ${{ secrets.NCR_SECRET_KEY }}
-
-    - name: Push to NCR
-      run: |
-        # 태그 지정
-        docker tag opa-bundle:local ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:${{ github.sha }}
-        docker tag opa-bundle:local ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
-
-        # NCR에 푸시
-        docker push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:${{ github.sha }}
-        docker push ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
-
-        echo "✅ Successfully pushed to NCR"
-        echo "Image: ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest"
-
-    - name: Create deployment summary
-      if: success()
-      run: |
-        cat >> $GITHUB_STEP_SUMMARY <<EOF
-        ## 📦 OPA Bundle Deployment Summary
-
-        ✅ **Successfully deployed to NHN Cloud Registry**
-
-        ### Details
-        - **Registry**: \`${{ env.NCR_REGISTRY }}\`
-        - **Repository**: \`${{ env.NCR_REPOSITORY }}\`
-        - **Tags**: \`${{ github.sha }}\`, \`latest\`
-
-        ### Docker Pull Command
-        \`\`\`bash
-        docker pull ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
-        \`\`\`
-
-        ### Run OPA with Bundle
-        \`\`\`bash
-        docker run -p 8181:8181 ${{ env.NCR_REGISTRY }}/${{ env.NCR_REPOSITORY }}:latest
-        \`\`\`
-        EOF
+      - name: Handle Failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed"
+          echo "Check the logs above for details"
+          
+          # 디버그 정보 출력
+          echo "Debug Information:"
+          echo "- Registry: ${{ env.NCR_REGISTRY }}"
+          echo "- Repository: ${{ env.NCR_REPOSITORY }}"
+          echo "- Working Directory: $(pwd)"
+          echo "- Policy CLI Version: $(policy version 2>&1 || echo 'Not installed')"
+          
+          exit 1
