@@ -43,7 +43,7 @@ https://github.com/maiload/policy_registry/settings/secrets/actions
 
 ```yaml
 # GitHub Secrets에 설정할 값들
-NCR_REGISTRY: opa.kr.ncr.nhncloudservice.com
+NCR_REGISTRY: opa1.kr.ncr.nhncloudservice.com
 NCR_ACCESS_KEY: ABC123DEF456GHI789
 NCR_SECRET_KEY: 123abc456def789ghi
 ```

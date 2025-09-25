@@ -67,24 +67,24 @@ graph LR
 
 1. **정책 Pull**
 ```bash
-policy pull <NCR_REGISTRY>/<ORGANIZATION>/opa-policies:latest
+policy pull <NCR_REGISTRY>/<ORGANIZATION>/opa1-policies:latest
 ```
 
 2. **OPA 서버 실행 (번들 사용)**
 ```bash
-opa run -s --bundle <NCR_REGISTRY>/<ORGANIZATION>/opa-policies:latest
+opa1 run -s --bundle <NCR_REGISTRY>/<ORGANIZATION>/opa1-policies:latest
 ```
 
 3. **Docker Compose 예시**
 ```yaml
 services:
   opa:
-    image: openpolicyagent/opa:latest
+    image: openpolicyagent/opa1:latest
     command:
       - "run"
       - "--server"
       - "--bundle"
-      - "<NCR_REGISTRY>/<ORGANIZATION>/opa-policies:latest"
+      - "<NCR_REGISTRY>/<ORGANIZATION>/opa1-policies:latest"
     environment:
       - OPA_AUTH_TOKEN=${NCR_TOKEN}
     ports:
